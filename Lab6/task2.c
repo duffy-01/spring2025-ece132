@@ -15,7 +15,7 @@
 //Date of last modification: 17 March 2025
 //*************************************************************************
 
-//include statements for necessary libraries
+// Include statements
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -100,7 +100,12 @@ void GPIOPortF_Handler(void) // isr for port f
     if(ui32Status & GPIO_PIN_0)                                            // if right button (pf0) is pressed
     {
         char buffer[50];                                                   // buffer for output message
-        sprintf(buffer, "Left presses: %d\r\n", g_ui32LeftCount);          // char array for "Left presses"
+
+        /* the reason we allocate a new buffer dynamically 
+        is because the number of presses is going to be 
+        different every time. */
+        
+        sprintf(buffer, "Left presses: %d\r\n", g_ui32LeftCount);          // assign char array for "Left presses: %d" to buffer
         for(i = 0; buffer[i] != '\0'; i++)                                 // loop through the messag
         {
             UARTCharPut(UART0_BASE, buffer[i]);                            // send each character over uart
