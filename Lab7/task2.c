@@ -33,7 +33,9 @@
 
 //main program
 int main(void) {
-    unsigned long adcValue;
+
+    // definme necessary variables
+    unsigned long adc_value;
     float voltage, resistance, current;
     unsigned long voltage_mV, resistance_ohm, current_uA;
     char output[100];
@@ -58,7 +60,7 @@ int main(void) {
         UARTCharPut(UART0_BASE, msg[i]);
     }
 
-    //enable ADC0 and configure PE3 as analog input (AIN0)
+    //enable ADC0 and configure PE3 as analog input AIN0
     SysCtlPeripheralEnable(SYSCTL_PERIPH_ADC0);
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOE);
     GPIOPinTypeADC(GPIO_PORTE_BASE, GPIO_PIN_3); // set PE3 as analog input
@@ -78,39 +80,47 @@ int main(void) {
     while (1) {
         //trigger ADC conversion
         ADCProcessorTrigger(ADC0_BASE, 0);
+        
         //wait for ADC conversion to complete
         while (!ADCIntStatus(ADC0_BASE, 0, false)) {}
         ADCIntClear(ADC0_BASE, 0); // clear ADC interrupt
-        ADCSequenceDataGet(ADC0_BASE, 0, &adcValue); // get ADC result
+        ADCSequenceDataGet(ADC0_BASE, 0, &adc_value); // get ADC result
 
         //calculate voltage (in V)
-        voltage = (adcValue * SYSTEM_VOLTAGE) / ADC_MAX;
+        voltage = (adc_value * SYSTEM_VOLTAGE) / ADC_MAX;
 
-        //calculate resistance based on linear drop from max resistance
+        // calculate resistance based on linear drop from max resistance
         resistance = MAX_RESISTANCE * (1.0f - (voltage / SYSTEM_VOLTAGE));
 
-        //calculate current (I = V / R), convert to microamps
+        // calculate current (I = V / R), convert to uA
         if (resistance > 0.0f)
             current = (voltage / resistance) * 1e6f;
         else
             current = 0.0f;
 
-        //convert floating-point values to integers for display
+        /* Something to note about calculating voltage, resistance, and current:
+        * Relationship V = IR leads to current increasing infinitely as resistance approaches
+        * zero. A better method would be to use a different pin with a known PUR or shunt
+        * which could be placed in series with the circuit. 
+        */
+        
+        // convert floating-point values to integers for display. better than dividing each number and using modulo.
+        // snprintf makes this possible.
         voltage_mV = (unsigned long)(voltage * 1000);
         resistance_ohm = (unsigned long)(resistance);
         current_uA = (unsigned long)(current);
 
-        //format output message to send over UART
+        // format output message to send over UART
         int len = snprintf(output, sizeof(output),
             "Source Voltage: %lu mV\tResistance: %lu Ohms\tCurrent: %lu uA\r\n",
             voltage_mV, resistance_ohm, current_uA);
 
-        //send output to terminal
+        // send output to terminal
         for (i = 0; i < len; i++) {
             UARTCharPut(UART0_BASE, output[i]);
         }
 
-        //delay approximately 10 seconds
+        // 10 second delay
         SysCtlDelay(SysCtlClockGet() / 3 * 10);
     }
 }
