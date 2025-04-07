@@ -5,10 +5,14 @@
 // Lab this program is associated with: Project 1
 // Lab due date: 4/15/25
 //
-// Hardware Inputs used:
-// Hardware Outputs used:
+// Hardware Inputs used:    F0 & F1 for N & E Ir Sensors 
+//                          F4 for SW1  
+//                          
+// Hardware Outputs used:   F2 & F3 for NS Red & Green
+//                          D6 & D7 for WE Red & Green
 //
-// Additional files needed:
+// Additional files needed: see includes for exact header info 
+//                          (driverlib and inc folders needed)
 //
 // Date of last modification: 4/6/25
 //*************************************************************************
@@ -29,7 +33,7 @@
 #include "driverlib/adc.h"
 
 //*****************************************
-//          Constants and Globals
+//              Constants
 //*****************************************
 
 #define pinNS GPIO_PIN_0
