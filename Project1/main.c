@@ -195,6 +195,6 @@ void light_EW(){
 void light_OVERRIDE(){
     GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_2 | GPIO_PIN_3, GPIO_PIN_3); // NS red, EW red
     GPIOPinWrite(GPIO_PORTD_BASE, GPIO_PIN_6 | GPIO_PIN_2, GPIO_PIN_6);
-    SysCtlDelay(SysCtlClockGet()); // delay for 10 seconds
+    SysCtlDelay(SysCtlClockGet() * 1 / 3 * 20); // delay for 20 seconds
     lightState = STATE_NS;
 }
