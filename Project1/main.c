@@ -1,18 +1,3 @@
-//*************************************************************************
-// Name of Group Members: Takeru Hiura, Shane Duffy
-// Creation Date: 4/3/25
-// Lab Section: Section 010
-// Lab this program is associated with: Project 1
-// Lab due date: 4/15/25
-//
-// Hardware Inputs used: F0, F1 (IR sensors)
-// Hardware Outputs used: F2, F3 (NS lights), D6, D7 (EW lights)
-//
-// Additional files needed:
-//
-// Date of last modification: 4/8/25
-//*************************************************************************
-
 // include statements
 #include <stdbool.h>
 #include <stdint.h>
@@ -27,43 +12,31 @@
 #include "driverlib/uart.h"
 #include "driverlib/adc.h"
 #include "driverlib/systick.h"
+#include "driverlib/pwm.h"
 
 //****************************
 //  STATE STUFF
 //****************************
 
-const int CAR_MAX = 5;
+uint32_t ulPeriod = 40000; // 2MHz / 50Hz = 40000 ticks for 20ms period
 
-typedef enum {STATE_NS, STATE_EW, OVERRIDE} trafficLightStates;
+typedef enum {LOCK, UNLOCK, INTRUDER} lockStates;
+lockStates lockState = LOCK; // Initialize state LOCK
 
-trafficLightStates lightState = STATE_EW; // Initialize state to NS green
-
-// default NS light green
-void light_NS();
-void light_EW();
-void light_OVERRIDE();
-
-//****************************
-//  IR SENSOR PARAMETERS
-//****************************
-
-const uint8_t pinNS = GPIO_PIN_6; // D6
-const uint8_t pinEW = GPIO_PIN_7; // D7
-void count_car(){}
-int carCount = 0; //global variable to count number of cars pass the sensor
-
-//****************************
-//  SWITCH PARAMETERS
-//****************************
-
-void portF_input_setup(uint8_t pins); // input setup function prototype
-void portD_input_setup(uint8_t pins); // input setup function prototype
-void portF_output_setup(uint8_t pins); // input setup function prototype
-void portD_output_setup(uint8_t pins); // input setup function prototype
-
-void pedestrian_override(void); //pedestrian_override prototype
-void car_count(uint8_t sensorPin);
+void Servo_Init(uint32_t dutyCycle);
+void intruder_alert();
+void portF_input_setup(uint8_t pins);
+void portF_output_setup(uint8_t pins);
 void systick(int reload_val);
+
+// Keypad Functions
+void keypad_init();
+int input();
+
+// Password Variables
+int password[4] = {1, 2, 3, 4};  // Correct sequence
+int user_input[4];               // Store user input
+int input_index = 0;             // Track input position
 
 /*
  * main.c
@@ -71,130 +44,183 @@ void systick(int reload_val);
 
 int main(void)
 {
-    // Set up clock
-    SysCtlClockSet(SYSCTL_SYSDIV_5 | SYSCTL_USE_PLL | SYSCTL_OSC_MAIN | SYSCTL_XTAL_16MHZ);
+    portF_input_setup(GPIO_PIN_0);
+    portF_output_setup(GPIO_PIN_2 | GPIO_PIN_3);
+    systick(0xFFFFFF);
+    keypad_init();
 
-    portF_input_setup(0x13);    //b10011 corresponds to SW1, N, and E respectively
-    portF_output_setup(0x0C);       //b01100
-    portD_output_setup(0x44);                 // setup the pins for NS and EW on port D
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_UART0);
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
 
-    systick(0xFFFFFF); //set reload value for SysTick
+    GPIOPinConfigure(GPIO_PA0_U0RX);
+    GPIOPinConfigure(GPIO_PA1_U0TX);
+    GPIOPinTypeUART(GPIO_PORTA_BASE, GPIO_PIN_0 | GPIO_PIN_1);
 
-    GPIOIntClear(GPIO_PORTF_BASE, GPIO_PIN_4);                      // clear the flag so the interrupt can happen again
-    GPIOIntTypeSet(GPIO_PORTF_BASE, GPIO_PIN_4, GPIO_FALLING_EDGE); // set interrupt type to falling edge for PF4 (switch SW1, active low)
-    GPIOIntRegister(GPIO_PORTF_BASE, pedestrian_override);          // register interrupt handler to pedestrian_override function
-    GPIOIntEnable(GPIO_PORTF_BASE, GPIO_PIN_4);                     // enable the interrupt
+    UARTConfigSetExpClk(UART0_BASE, SysCtlClockGet(), 115200,
+        (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE | UART_CONFIG_PAR_NONE));
 
-    SysTickIntRegister(pedestrian_override);
-    IntMasterEnable();                                              //enable interrupts
+    GPIOIntClear(GPIO_PORTF_BASE, GPIO_PIN_0);
+    GPIOIntTypeSet(GPIO_PORTF_BASE, GPIO_PIN_0, GPIO_FALLING_EDGE);
+    GPIOIntRegister(GPIO_PORTF_BASE, intruder_alert);
+    GPIOIntEnable(GPIO_PORTF_BASE, GPIO_PIN_0);
+    SysTickIntRegister(intruder_alert);
+    IntMasterEnable();
+
+    Servo_Init(5000);
 
     while (1)
     {
-        switch(lightState)
+        int key = input(); // check if key pressed
+        if (key != -1) // if key pressed
         {
-            case STATE_NS:
-                light_NS();
-                car_count(GPIO_PIN_0);
-                lightState = STATE_EW;
+            user_input[input_index] = key;
+            input_index++;
+            UARTCharPut(UART0_BASE, 'a' + input_index);
+
+            if (input_index > 3) // Check when 4 digits are entered
+            {
+                bool correct = true;
+                int i = 0;
+                for (i = 0; i < 4; i++)
+                {
+                    if (user_input[i] != password[i])
+                    {
+                        correct = false;
+                        break;
+                    }
+                }
+
+                if (correct)
+                {
+                    lockState = UNLOCK; // correct password
+                     user_input[0] = 0;
+                     user_input[1] = 0;
+                     user_input[2] = 0;
+                     user_input[3] = 0;
+                     correct = false;
+                     input_index = 0;
+                }
+                else
+                {
+                    input_index = 0; // reset if wrong
+                    UARTCharPut(UART0_BASE, 'W');
+                }
+            }
+        }
+
+        switch(lockState)
+        {
+            case LOCK:
+                GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_2, 0);
+                GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_3, GPIO_PIN_3); // red LED
+                PWMPulseWidthSet(PWM1_BASE, PWM_OUT_5, 5000);
                 break;
-            case STATE_EW:
-                light_EW();
-                car_count(GPIO_PIN_1);
-                lightState = STATE_NS;
+            case UNLOCK:
+                GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_3, 0);
+                GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_2, GPIO_PIN_2); // green LED
+                PWMPulseWidthSet(PWM1_BASE, PWM_OUT_5, 1000);
+                SysCtlDelay(SysCtlClockGet() * 1 / 3 * 5);
+                lockState = LOCK;
                 break;
-            case OVERRIDE:
-                light_OVERRIDE();
+            case INTRUDER:
+                GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_2, 0);
+                GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_3, GPIO_PIN_3); // red LED
+                PWMPulseWidthSet(PWM1_BASE, PWM_OUT_5, 5000);
                 break;
         }
     }
-    SysTickIntRegister(0);              //clear SysTick interrupt register
 
-    return 0;
 }
 
 // Function definitions
 void portF_input_setup(uint8_t pins){
-    SYSCTL_RCGCGPIO_R |= SYSCTL_RCGCGPIO_R5; // configure the clock for Port F
-    GPIO_PORTF_LOCK_R = GPIO_LOCK_KEY; // unlock pins
-    GPIO_PORTF_CR_R |= pins; // allow interaction with pins
-    GPIO_PORTF_DIR_R &= ~pins; // set direction for pins to be input
-    GPIO_PORTF_PUR_R |= pins; // set up pull-up resistors for active low pins
-    GPIO_PORTF_DEN_R |= pins; // configure the enable
+    SYSCTL_RCGCGPIO_R |= SYSCTL_RCGCGPIO_R5;
+    GPIO_PORTF_LOCK_R = GPIO_LOCK_KEY;
+    GPIO_PORTF_CR_R |= pins;
+    GPIO_PORTF_DIR_R &= ~pins;
+    GPIO_PORTF_PUR_R |= pins;
+    GPIO_PORTF_DEN_R |= pins;
 }
 
 void portF_output_setup(uint8_t pins){
-    SYSCTL_RCGCGPIO_R |= 0x20;          //enable clock on port f
-    GPIO_PORTF_DIR_R |= pins;     //set pin as output
-    GPIO_PORTF_DEN_R |= pins;     //enable pin
+    SYSCTL_RCGCGPIO_R |= SYSCTL_RCGCGPIO_R5;
+    GPIO_PORTF_DIR_R |= pins;
+    GPIO_PORTF_DEN_R |= pins;
 }
 
-void portD_input_setup(uint8_t pins){
-    SYSCTL_RCGCGPIO_R |= SYSCTL_RCGCGPIO_R3; // configure the clock for Port D
-    GPIO_PORTD_CR_R |= pins; // allow interaction with pins
-    GPIO_PORTD_DIR_R &= ~pins; // set direction for pins to be input
-    GPIO_PORTD_PUR_R |= pins; // set up pull-up resistors for active low pins
-    GPIO_PORTD_DEN_R |= pins; // configure the enable
-}
+void Servo_Init(uint32_t dutyCycle) {
+    SysCtlPWMClockSet(SYSCTL_PWMDIV_8);
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOF);
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_PWM1);
+    GPIOPinConfigure(GPIO_PF1_M1PWM5);
+    GPIOPinTypePWM(GPIO_PORTF_BASE, GPIO_PIN_1);
+    PWMGenConfigure(PWM1_BASE, PWM_GEN_2, PWM_GEN_MODE_UP_DOWN | PWM_GEN_MODE_NO_SYNC);
+    PWMGenPeriodSet(PWM1_BASE, PWM_GEN_2, ulPeriod);
 
-void portD_output_setup(uint8_t pins){
-    SYSCTL_RCGCGPIO_R |= 0x08;          //enable clock on port f
-    GPIO_PORTD_DIR_R |= pins;     //set pin as output
-    GPIO_PORTD_DEN_R |= pins;     //enable pin
+    PWMPulseWidthSet(PWM1_BASE, PWM_OUT_5, dutyCycle);
+    PWMGenEnable(PWM1_BASE, PWM_GEN_2);
+    PWMOutputState(PWM1_BASE, PWM_OUT_5_BIT, true);
 }
 
 void systick(int reload_val){
-    NVIC_ST_CTRL_R = 0;                 //disable SysTick
-    NVIC_ST_RELOAD_R = reload_val;      //set reload value
-    NVIC_ST_CURRENT_R = 0;              //clear current value
-    NVIC_ST_CTRL_R = 0x07;              //enable SysTick with interrupts
+    NVIC_ST_CTRL_R = 0;
+    NVIC_ST_RELOAD_R = reload_val;
+    NVIC_ST_CURRENT_R = 0;
+    NVIC_ST_CTRL_R = 0x07;
 }
 
-void pedestrian_override(void){
-    GPIOIntClear(GPIO_PORTF_BASE, GPIO_PIN_4); // clear the flag so the interrupt can happen again
-    if(!GPIOPinRead(GPIO_PORTF_BASE, GPIO_PIN_4)){ // check if switch SW1 is pressed
-        lightState = OVERRIDE;
-
+void intruder_alert(void){
+    GPIOIntClear(GPIO_PORTF_BASE, GPIO_PIN_0);
+    if(!GPIOPinRead(GPIO_PORTF_BASE, GPIO_PIN_0)){
+        while(!GPIOPinRead(GPIO_PORTF_BASE, GPIO_PIN_0));
+        lockState = INTRUDER;
+        char messageI[]="INTRUDER ALERT";
+        int i;
+        int mess_len = sizeof(messageI)/sizeof(messageI[0]);
+        for(i = 0; i < mess_len; i++){
+            UARTCharPut(UART0_BASE, messageI[i]);
+        }
+        UARTCharPut(UART0_BASE, '\n');
+        UARTCharPut(UART0_BASE, '\r');
     }
 }
 
-void car_count(uint8_t sensorPin){
-    int count = 0;
-    uint8_t prevState= 1; // sensor idle
+//*****************
+// Keypad setup
+//*****************
+void keypad_init(){
+    SYSCTL_RCGCGPIO_R |= SYSCTL_RCGCGPIO_R1 | SYSCTL_RCGCGPIO_R2 | SYSCTL_RCGCGPIO_R4;
+    while((SYSCTL_RCGCGPIO_R & (SYSCTL_RCGCGPIO_R1 | SYSCTL_RCGCGPIO_R2 | SYSCTL_RCGCGPIO_R4))==0);
 
-    while (count <= CAR_MAX) {
-        uint8_t currentState = (GPIO_PORTF_DATA_R & sensorPin) ? 1 : 0;
-        if (prevState == 0 && currentState == 1){count++;}
-        prevState = currentState;
+    GPIO_PORTB_DEN_R |= 0xFF;
+    GPIO_PORTB_DIR_R |= 0xFF;
 
-        SysCtlDelay(SysCtlClockGet()/3000);  //delay to control polling rate
+    GPIO_PORTC_DEN_R |= 0xF0;
+    GPIO_PORTC_DIR_R &= ~0xF0;
+    GPIO_PORTC_PDR_R |= 0xF0;
 
-        GPIOIntClear(GPIO_PORTF_BASE, GPIO_PIN_4); // clear the flag so the interrupt can happen again
-            if(!GPIOPinRead(GPIO_PORTF_BASE, GPIO_PIN_4)){ // check if switch SW1 is pressed
-                light_OVERRIDE();
-                break;
+    GPIO_PORTE_DEN_R |= 0x0F;
+    GPIO_PORTE_DIR_R |= 0x0F;
+}
+
+// Keypad scan function
+int input(){
+    int row, col;
+    for(row = 0; row < 4; row++){
+        GPIO_PORTE_DATA_R = (1 << row);
+        for(col = 0; col < 4; col++){
+            if((GPIO_PORTC_DATA_R & (1 << (col + 4))) != 0){
+                while(GPIO_PORTC_DATA_R);
+                // Now return the key number
+                int key_map[4][4] = {
+                    {1,2,3,10},
+                    {4,5,6,11},
+                    {7,8,9,12},
+                    {14,0,15,13}
+                };
+                return key_map[row][col];
             }
+        }
     }
-}
-
-void light_NS(){
-    GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_2 | GPIO_PIN_3, 0); // NS green, EW red
-    GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_2, GPIO_PIN_2); // NS green, EW red
-
-    GPIOPinWrite(GPIO_PORTD_BASE, GPIO_PIN_6 | GPIO_PIN_2, 0);
-    GPIOPinWrite(GPIO_PORTD_BASE, GPIO_PIN_6,  GPIO_PIN_6);
-}
-
-void light_EW(){
-    GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_2 | GPIO_PIN_3, 0); // NS green, EW red
-    GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_3, GPIO_PIN_3); // NS green, EW red
-
-    GPIOPinWrite(GPIO_PORTD_BASE, GPIO_PIN_6 | GPIO_PIN_2, 0); // NS green, EW red
-    GPIOPinWrite(GPIO_PORTD_BASE, GPIO_PIN_2, GPIO_PIN_2); // NS green, EW red
-}
-
-void light_OVERRIDE(){
-    GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_2 | GPIO_PIN_3, GPIO_PIN_3); // NS red, EW red
-    GPIOPinWrite(GPIO_PORTD_BASE, GPIO_PIN_6 | GPIO_PIN_2, GPIO_PIN_6);
-    SysCtlDelay(SysCtlClockGet() * 1 / 3 * 20); // delay for 20 seconds
-    lightState = STATE_NS;
+    return -1; // no key pressed
 }
