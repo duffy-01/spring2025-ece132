@@ -66,6 +66,8 @@ int main(void)
     SysTickIntRegister(intruder_alert);
     IntMasterEnable();
 
+    Servo_Init(5000);
+
     while (1)
     {
         int key = input(); // check if key pressed
@@ -73,8 +75,9 @@ int main(void)
         {
             user_input[input_index] = key;
             input_index++;
+            UARTCharPut(UART0_BASE, 'a' + input_index);
 
-            if (input_index == 4) // Check when 4 digits are entered
+            if (input_index > 3) // Check when 4 digits are entered
             {
                 bool correct = true;
                 int i = 0;
@@ -90,10 +93,17 @@ int main(void)
                 if (correct)
                 {
                     lockState = UNLOCK; // correct password
+                     user_input[0] = 0;
+                     user_input[1] = 0;
+                     user_input[2] = 0;
+                     user_input[3] = 0;
+                     correct = false;
+                     input_index = 0;
                 }
                 else
                 {
                     input_index = 0; // reset if wrong
+                    UARTCharPut(UART0_BASE, 'W');
                 }
             }
         }
@@ -101,17 +111,21 @@ int main(void)
         switch(lockState)
         {
             case LOCK:
+                GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_2, 0);
                 GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_3, GPIO_PIN_3); // red LED
-                Servo_Init(5000);
+                PWMPulseWidthSet(PWM1_BASE, PWM_OUT_5, 5000);
                 break;
             case UNLOCK:
+                GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_3, 0);
                 GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_2, GPIO_PIN_2); // green LED
-                Servo_Init(1000);
+                PWMPulseWidthSet(PWM1_BASE, PWM_OUT_5, 1000);
+                SysCtlDelay(SysCtlClockGet() * 1 / 3 * 5);
+                lockState = LOCK;
                 break;
             case INTRUDER:
-                GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_2 | GPIO_PIN_3, 0);
+                GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_2, 0);
                 GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_3, GPIO_PIN_3); // red LED
-                Servo_Init(5000);
+                PWMPulseWidthSet(PWM1_BASE, PWM_OUT_5, 5000);
                 break;
         }
     }
@@ -158,6 +172,7 @@ void systick(int reload_val){
 void intruder_alert(void){
     GPIOIntClear(GPIO_PORTF_BASE, GPIO_PIN_0);
     if(!GPIOPinRead(GPIO_PORTF_BASE, GPIO_PIN_0)){
+        while(!GPIOPinRead(GPIO_PORTF_BASE, GPIO_PIN_0));
         lockState = INTRUDER;
         char messageI[]="INTRUDER ALERT";
         int i;
@@ -165,6 +180,8 @@ void intruder_alert(void){
         for(i = 0; i < mess_len; i++){
             UARTCharPut(UART0_BASE, messageI[i]);
         }
+        UARTCharPut(UART0_BASE, '\n');
+        UARTCharPut(UART0_BASE, '\r');
     }
 }
 
@@ -193,6 +210,7 @@ int input(){
         GPIO_PORTE_DATA_R = (1 << row);
         for(col = 0; col < 4; col++){
             if((GPIO_PORTC_DATA_R & (1 << (col + 4))) != 0){
+                while(GPIO_PORTC_DATA_R);
                 // Now return the key number
                 int key_map[4][4] = {
                     {1,2,3,10},
