@@ -83,10 +83,9 @@ int main(void)
 
     WatchdogInit();
 
+    WatchdogIntClear(WATCHDOG0_BASE);
     while (1)
     {
-        WatchdogIntClear(WATCHDOG0_BASE);
-
         int key = input(); // check if key pressed
         if (key != -1) // if key pressed
         {
@@ -94,7 +93,7 @@ int main(void)
             if(input_index == 0){
                 input_started = true;
                 last_input_time = current_time;
-                
+
                 char startMsg[] = "Timer started!";
                 int i;
                 for (i = 0; i < sizeof(startMsg) - 1; i++) {
@@ -145,7 +144,7 @@ int main(void)
                 else
                 {
                     input_index = 0; // reset if wrong
-                    char messageW[]= "Incorrect password. ";
+                    char messageW[]= "Incorrect password.";
                     int i;
                     int mess_lenW = sizeof(messageW)/sizeof(messageW[0]);
                     for(i = 0; i < mess_lenW; i++){
@@ -155,7 +154,7 @@ int main(void)
                     UARTCharPut(UART0_BASE, '\r');
                 }
             }
-        
+
 
         switch(lockState)
         {
@@ -177,7 +176,7 @@ int main(void)
                 PWMPulseWidthSet(PWM1_BASE, PWM_OUT_5, 5000);
                 break;
         }
-    
+
     }
 }
 
@@ -279,10 +278,10 @@ void WatchdogIntHandler(void)
 {
     // Clear the watchdog interrupt
     WatchdogIntClear(WATCHDOG0_BASE);
-    
+
     // Increment time counter
     current_time++;
-        
+
     // Check if input has been started but not completed
     if (input_started && input_index > 0 && input_index < 4)
     {
@@ -291,7 +290,7 @@ void WatchdogIntHandler(void)
             // Reset input
             input_index = 0;
             input_started = false;
-            
+
             // Display timeout message
             char message[] = "Timeout! Please enter 4 digits within 10 seconds.";
             int i = 0;
@@ -311,28 +310,28 @@ void WatchdogInit(void)
     // Enable watchdog peripheral
     SysCtlPeripheralEnable(SYSCTL_PERIPH_WDOG0);
     while(!SysCtlPeripheralReady(SYSCTL_PERIPH_WDOG0)) {}
-    
+
     // Register and enable watchdog interrupt
     IntRegister(INT_WATCHDOG, WatchdogIntHandler);
     IntEnable(INT_WATCHDOG);
-    
+
     // Unlock if locked
     if(WatchdogLockState(WATCHDOG0_BASE) == true)
     {
         WatchdogUnlock(WATCHDOG0_BASE);
     }
-    
+
     // Configure watchdog
     WatchdogIntEnable(WATCHDOG0_BASE);
     WatchdogIntTypeSet(WATCHDOG0_BASE, WATCHDOG_INT_TYPE_INT);
-    
+
     // Set reload value for 1 second intervals
     // SysCtlClockGet() gives ticks per second, divide by 1 for 1-second timeout
     WatchdogReloadSet(WATCHDOG0_BASE, SysCtlClockGet()/1);
-    
+
     // IMPORTANT: We don't want the system to reset, just the interrupt
     WatchdogResetDisable(WATCHDOG0_BASE);
-    
+
     // Enable watchdog
     WatchdogEnable(WATCHDOG0_BASE);
 }
