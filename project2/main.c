@@ -282,20 +282,7 @@ void WatchdogIntHandler(void)
     
     // Increment time counter
     current_time++;
-    
-    // Debug - uncomment to see time passing
-    /*if (current_time % 5 == 0) {
-        char timeMsg[] = "Timer: ";
-        int i;
-        for (i = 0; i < sizeof(timeMsg) - 1; i++) {
-            UARTCharPut(UART0_BASE, timeMsg[i]);
-        }
-        UARTCharPut(UART0_BASE, '0' + (current_time/10));
-        UARTCharPut(UART0_BASE, '0' + (current_time%10));
-        UARTCharPut(UART0_BASE, '\n');
-        UARTCharPut(UART0_BASE, '\r');
-    }*/
-    
+        
     // Check if input has been started but not completed
     if (input_started && input_index > 0 && input_index < 4)
     {
