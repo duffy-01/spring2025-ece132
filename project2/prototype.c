@@ -1,4 +1,3 @@
-// include statements
 #include <stdbool.h>
 #include <stdint.h>
 #include "inc/tm4c123gh6pm.h"
@@ -21,7 +20,7 @@
 //  STATE STUFF
 //****************************
 
-uint32_t ulPeriod = 40000; 
+uint32_t ulPeriod = 40000; // 2MHz / 50Hz = 40000 ticks for 20ms period
 
 typedef enum {LOCK, UNLOCK, INTRUDER} lockStates;
 lockStates lockState = LOCK; // Initialize state LOCK
@@ -46,7 +45,7 @@ void WatchdogInit(void);
 void WatchdogIntHandler(void);
 
 
-volatile bool g_bWatchdogFeed = 1;
+volatile bool g_bWatchdogFeed = true;
 
 /*
  * main.c
@@ -83,6 +82,8 @@ int main(void)
 
     WatchdogIntClear(WATCHDOG0_BASE);
 
+
+
     //Peripheral setup for ADC0
     //This will read the voltage off Port E Pin 0
     //This ADC will have the ability to read a voltage between 0mV and 3300 mV
@@ -94,7 +95,7 @@ int main(void)
     //The ADC will be triggered to get a sample based on the condition of processor trigger
     //The ADC will have a priority that is higher than other samplings
 
-    ADCSequenceStepConfigure(ADC0_BASE,0,0,ADC_CTL_IE | ADC_CTL_END | ADC_CTL_CH3); //channel 3 for PE0 
+    ADCSequenceStepConfigure(ADC0_BASE,0,0,ADC_CTL_IE | ADC_CTL_END | ADC_CTL_CH9); //channel 3 for PE0
     //For sequence 0 the step configuration is being setup
     //The step configuration is for Channel 3 to be read and this to be the sample that is first in the sequence read
     //It is configured that the ADC interrupt is (allowed or not allowed) to happen
@@ -108,7 +109,7 @@ int main(void)
         int key = input(); // check if key pressed
         if (key != -1) // if key pressed
         {
-            g_bWatchdogFeed = 1;
+            g_bWatchdogFeed = true;
 
             user_input[input_index] = key;
             input_index++;
@@ -125,7 +126,7 @@ int main(void)
 
             if (input_index > 3) // Check when 4 digits are entered
             {
-                g_bWatchdogFeed = 1;
+                g_bWatchdogFeed = true;
                 bool correct = true;
                 int i = 0;
                 for (i = 0; i < 4; i++)
@@ -139,7 +140,7 @@ int main(void)
 
                 if (correct && (INPUT > 1241))
                 {
-                    lockState = UNLOCK; 
+                    lockState = UNLOCK;
                      user_input[0] = 0;
                      user_input[1] = 0;
                      user_input[2] = 0;
@@ -149,7 +150,7 @@ int main(void)
                 }
                 else
                 {
-                    input_index = 0; 
+                    input_index = 0;
                     char messageW[]= "Incorrect password.";
                     int i;
                     int mess_lenW = sizeof(messageW)/sizeof(messageW[0]);
@@ -284,12 +285,13 @@ int input(){
 
 void WatchdogIntHandler(void)
 {
+    // Clear the watchdog interrupt
     WatchdogIntClear(WATCHDOG0_BASE);
 
     if (!g_bWatchdogFeed && input_index > 0 && input_index < 4)
     {
         input_index = 0;
-        
+
         char message[] = "Input timeout. Please try again.";
         int i = 0;
         for (i = 0; i < sizeof(message) - 1; i++)
@@ -298,14 +300,14 @@ void WatchdogIntHandler(void)
         }
         UARTCharPut(UART0_BASE, '\n');
         UARTCharPut(UART0_BASE, '\r');
-
-        g_bWatchdogFeed = 1;
+        g_bWatchdogFeed = true;
     }
     else{
-        g_bWatchdogFeed = 0;
+
+        g_bWatchdogFeed = false;
     }
-    
-    
+
+
 }
 
 void WatchdogInit(void)
@@ -326,7 +328,6 @@ void WatchdogInit(void)
 
     WatchdogReloadSet(WATCHDOG0_BASE, SysCtlClockGet() * 10);
 
-    WatchdogResetDisable(WATCHDOG0_BASE);
 
     WatchdogEnable(WATCHDOG0_BASE);
 }
