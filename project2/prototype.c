@@ -15,7 +15,6 @@
 #include "driverlib/pwm.h"
 #include "driverlib/adc.h"
 #include "driverlib/watchdog.h"
-#include "driverlib/adc.h"
 
 
 //****************************
@@ -47,7 +46,7 @@ void WatchdogInit(void);
 void WatchdogIntHandler(void);
 
 
-volatile bool g_bWatchdogFeed = true;
+volatile bool g_bWatchdogFeed = 1;
 
 /*
  * main.c
@@ -56,7 +55,6 @@ volatile bool g_bWatchdogFeed = true;
 int main(void)
 {
     unsigned long INPUT;
-
     portF_input_setup(GPIO_PIN_0);
     portF_output_setup(GPIO_PIN_2 | GPIO_PIN_3);
     systick(0xFFFFFF);
@@ -85,10 +83,8 @@ int main(void)
 
     WatchdogIntClear(WATCHDOG0_BASE);
 
-
-
     //Peripheral setup for ADC0
-    //This will read the voltage off Port E Pin 3
+    //This will read the voltage off Port E Pin 0
     //This ADC will have the ability to read a voltage between 0mV and 3300 mV
     //The resolution of the measurement is 0.8 mV
     SysCtlPeripheralEnable(SYSCTL_PERIPH_ADC0);
@@ -98,9 +94,9 @@ int main(void)
     //The ADC will be triggered to get a sample based on the condition of processor trigger
     //The ADC will have a priority that is higher than other samplings
 
-    ADCSequenceStepConfigure(ADC0_BASE,0,0,ADC_CTL_IE | ADC_CTL_END | ADC_CTL_CH0);
+    ADCSequenceStepConfigure(ADC0_BASE,0,0,ADC_CTL_IE | ADC_CTL_END | ADC_CTL_CH3); //channel 3 for PE0 
     //For sequence 0 the step configuration is being setup
-    //The step configuration is for Channel 0 to be read and this to be the sample that is first in the sequence read
+    //The step configuration is for Channel 3 to be read and this to be the sample that is first in the sequence read
     //It is configured that the ADC interrupt is (allowed or not allowed) to happen
 
     ADCSequenceEnable(ADC0_BASE, 0); //Enable ADC0 with sample sequence number 0
@@ -109,11 +105,10 @@ int main(void)
     {
         ADCProcessorTrigger(ADC0_BASE,0);//causes a processor trigger for a sample sequence
         ADCSequenceDataGet(ADC0_BASE,0,&INPUT);//gets ADC value and stores it in unsigned long variable INPUT
-
         int key = input(); // check if key pressed
         if (key != -1) // if key pressed
         {
-            g_bWatchdogFeed = true;
+            g_bWatchdogFeed = 1;
 
             user_input[input_index] = key;
             input_index++;
@@ -130,7 +125,7 @@ int main(void)
 
             if (input_index > 3) // Check when 4 digits are entered
             {
-                g_bWatchdogFeed = true;
+                g_bWatchdogFeed = 1;
                 bool correct = true;
                 int i = 0;
                 for (i = 0; i < 4; i++)
@@ -142,7 +137,7 @@ int main(void)
                     }
                 }
 
-                if (correct)
+                if (correct && (INPUT > 1241))
                 {
                     lockState = UNLOCK; 
                      user_input[0] = 0;
@@ -248,8 +243,8 @@ void intruder_alert(void){
 // Keypad setup
 //*****************
 void keypad_init(){
-    SYSCTL_RCGCGPIO_R |= SYSCTL_RCGCGPIO_R1 | SYSCTL_RCGCGPIO_R2 | SYSCTL_RCGCGPIO_R3;
-    while((SYSCTL_RCGCGPIO_R & (SYSCTL_RCGCGPIO_R1 | SYSCTL_RCGCGPIO_R2 | SYSCTL_RCGCGPIO_R3))==0);
+    SYSCTL_RCGCGPIO_R |= SYSCTL_RCGCGPIO_R1 | SYSCTL_RCGCGPIO_R2 | SYSCTL_RCGCGPIO_R4;
+    while((SYSCTL_RCGCGPIO_R & (SYSCTL_RCGCGPIO_R1 | SYSCTL_RCGCGPIO_R2 | SYSCTL_RCGCGPIO_R4))==0);
 
     GPIO_PORTB_DEN_R |= 0xFF;
     GPIO_PORTB_DIR_R |= 0xFF;
@@ -258,18 +253,21 @@ void keypad_init(){
     GPIO_PORTC_DIR_R &= ~0xF0;
     GPIO_PORTC_PDR_R |= 0xF0;
 
-    GPIO_PORTD_DEN_R |= 0x0F;
-    GPIO_PORTD_DIR_R |= 0x0F;
+    GPIO_PORTE_DEN_R |= 0x0F;
+    GPIO_PORTE_DIR_R |= 0x0F;
 }
 
 
+
+// Keypad scan function
 int input(){
     int row, col;
     for(row = 0; row < 4; row++){
-        GPIO_PORTD_DATA_R = (1 << row);  
+        GPIO_PORTE_DATA_R = (1 << row);
         for(col = 0; col < 4; col++){
             if((GPIO_PORTC_DATA_R & (1 << (col + 4))) != 0){
-                while(GPIO_PORTC_DATA_R & (1 << (col + 4)));  
+                while(GPIO_PORTC_DATA_R);
+                // Now return the key number
                 int key_map[4][4] = {
                     {1,2,3,'A'},
                     {4,5,6,'B'},
@@ -280,7 +278,7 @@ int input(){
             }
         }
     }
-    return -1;
+    return -1; // no key pressed
 }
 
 
@@ -300,10 +298,11 @@ void WatchdogIntHandler(void)
         }
         UARTCharPut(UART0_BASE, '\n');
         UARTCharPut(UART0_BASE, '\r');
-        g_bWatchdogFeed = true;
+
+        g_bWatchdogFeed = 1;
     }
     else{
-        g_bWatchdogFeed = false;
+        g_bWatchdogFeed = 0;
     }
     
     
