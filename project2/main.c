@@ -34,12 +34,12 @@
 
 
 
-//structure used for the FSM of the system 
+//structure used for the FSM of the system
 typedef enum {LOCK, UNLOCK, INTRUDER} lockStates;
-lockStates lockState = LOCK; // Initialize state to LOCK 
+lockStates lockState = LOCK; // Initialize state to LOCK
 
 
-//function prototypes 
+//function prototypes
 void Servo_Init(void);
 void intruder_alert(void);
 void portF_input_setup(uint8_t pins);
@@ -55,7 +55,7 @@ void WatchdogIntHandler(void);
 
 int password[4] = {1, 2, 3, 4}; // password sequence for lock device
 int user_input[4];              // array used to get user input
-int input_index = 0;            // variable used to keep track of user input 
+int input_index = 0;            // variable used to keep track of user input
 
 
 
@@ -64,10 +64,10 @@ volatile bool g_bWatchdogFeed = 1; //intialize feed variable to feed for watchdo
 
 
 int main(void){
-    unsigned long adc_input; //used to store adc value 
+    unsigned long adc_input; //used to store adc value
 
-    portF_input_setup(GPIO_PIN_0); //enable PF0 for user input 
-    portF_output_setup(GPIO_PIN_2 | GPIO_PIN_3); //enable PF2 and PF3 for led output 
+    portF_input_setup(GPIO_PIN_0); //enable PF0 for user input
+    portF_output_setup(GPIO_PIN_2 | GPIO_PIN_3); //enable PF2 and PF3 for led output
     systick(0xFFFFFF);
 
     //functions to initialize peripherals and software
@@ -112,14 +112,14 @@ int main(void){
             user_input[input_index] = key; //store user input from keypad
             input_index++; //increment the user input index
             char messageE[]= "Entered digit "; //char array for message to display if user input was recognized
-            int i = 0; // initialize variable i 
+            int i = 0; // initialize variable i
             int mess_lenE = sizeof(messageE)/sizeof(messageE[0]); //calculate length of message
             for(i = 0; i < mess_lenE; i++){ //using UART to display message on terminal
                 UARTCharPut(UART0_BASE, messageE[i]);
             }
             UARTCharPut(UART0_BASE, '0' + input_index); //print which input has been entered
             UARTCharPut(UART0_BASE, '\n'); //newline on terminal
-            UARTCharPut(UART0_BASE, '\r'); //set cursor to start of newline 
+            UARTCharPut(UART0_BASE, '\r'); //set cursor to start of newline
         }
 
             if (input_index > 3) { //checks if user entered all 4 keypad inputs
@@ -133,10 +133,10 @@ int main(void){
                     }
                 }
 
-                if (correct && (input_index > 1241)) { // check if the potentiometer is in the correct position and if the password entered is correct
-                    lockState = UNLOCK; //set fsm state to unlock 
+                if (correct && (adc_input > 1241)) { // check if the potentiometer is in the correct position and if the password entered is correct
+                    lockState = UNLOCK; //set fsm state to unlock
                     // set all user inputs back to 0 for the next attempt
-                     user_input[0] = 0; 
+                     user_input[0] = 0;
                      user_input[1] = 0;
                      user_input[2] = 0;
                      user_input[3] = 0;
@@ -157,7 +157,7 @@ int main(void){
             }
 
 
-        //switch statement for each of the states in the FSM 
+        //switch statement for each of the states in the FSM
         switch(lockState){
             case LOCK: //lock state
                 GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_2, 0); //make sure green LED is off
@@ -357,6 +357,6 @@ void Watchdog_Init(void)
     }
     WatchdogIntEnable(WATCHDOG0_BASE);
     WatchdogIntTypeSet(WATCHDOG0_BASE, WATCHDOG_INT_TYPE_INT);
-    WatchdogReloadSet(WATCHDOG0_BASE, SysCtlClockGet() * 10/3);
+    WatchdogReloadSet(WATCHDOG0_BASE, SysCtlClockGet() * 10);
     WatchdogEnable(WATCHDOG0_BASE);
 }
