@@ -45,7 +45,7 @@ void WatchdogInit(void);
 void WatchdogIntHandler(void);
 
 
-volatile bool g_bWatchdogFeed = true;
+volatile bool g_bWatchdogFeed = 1;
 
 /*
  * main.c
@@ -109,7 +109,7 @@ int main(void)
         int key = input(); // check if key pressed
         if (key != -1) // if key pressed
         {
-            g_bWatchdogFeed = true;
+            g_bWatchdogFeed = 1;
 
             user_input[input_index] = key;
             input_index++;
@@ -126,7 +126,7 @@ int main(void)
 
             if (input_index > 3) // Check when 4 digits are entered
             {
-                g_bWatchdogFeed = true;
+                g_bWatchdogFeed = 1;
                 bool correct = true;
                 int i = 0;
                 for (i = 0; i < 4; i++)
@@ -260,7 +260,6 @@ void keypad_init(){
 
 
 
-// Keypad scan function
 int input(){
     int row, col;
     for(row = 0; row < 4; row++){
@@ -268,7 +267,6 @@ int input(){
         for(col = 0; col < 4; col++){
             if((GPIO_PORTC_DATA_R & (1 << (col + 4))) != 0){
                 while(GPIO_PORTC_DATA_R);
-                // Now return the key number
                 int key_map[4][4] = {
                     {1,2,3,'A'},
                     {4,5,6,'B'},
@@ -279,13 +277,12 @@ int input(){
             }
         }
     }
-    return -1; // no key pressed
+    return -1;
 }
 
 
 void WatchdogIntHandler(void)
 {
-    // Clear the watchdog interrupt
     WatchdogIntClear(WATCHDOG0_BASE);
 
     if (!g_bWatchdogFeed && input_index > 0 && input_index < 4)
@@ -300,11 +297,11 @@ void WatchdogIntHandler(void)
         }
         UARTCharPut(UART0_BASE, '\n');
         UARTCharPut(UART0_BASE, '\r');
-        g_bWatchdogFeed = true;
+        g_bWatchdogFeed = 1;
     }
     else{
 
-        g_bWatchdogFeed = false;
+        g_bWatchdogFeed = 0;
     }
 
 
@@ -326,7 +323,7 @@ void WatchdogInit(void)
     WatchdogIntEnable(WATCHDOG0_BASE);
     WatchdogIntTypeSet(WATCHDOG0_BASE, WATCHDOG_INT_TYPE_INT);
 
-    WatchdogReloadSet(WATCHDOG0_BASE, SysCtlClockGet() * 10);
+    WatchdogReloadSet(WATCHDOG0_BASE, SysCtlClockGet() * 10/3);
 
 
     WatchdogEnable(WATCHDOG0_BASE);
