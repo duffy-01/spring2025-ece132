@@ -1,3 +1,19 @@
+//*************************************************************************
+// Name of Group Members: Takeru Hiura, Shane Duffy
+// Creation Date: 4/18/25
+// Lab Section: Section 010
+// Lab this program is associated with: Project 2
+// Lab due date: 5/9/25
+//
+// Hardware Inputs used: F0, F1 (IR sensors)
+// Hardware Outputs used: F2, F3 LEDs, D2, D6 (EW lights)
+//
+// Additional files needed: driverlib and inc files
+//
+// Date of last modification: 4/28/25
+//*************************************************************************
+
+// include statements
 #include <stdbool.h>
 #include <stdint.h>
 #include "inc/tm4c123gh6pm.h"
@@ -18,9 +34,9 @@
 
 
 
-
+//structure used for the FSM of the system 
 typedef enum {LOCK, UNLOCK, INTRUDER} lockStates;
-lockStates lockState = LOCK; // Initialize state LOCK
+lockStates lockState = LOCK; // Initialize state to LOCK 
 
 
 //function prototypes 
@@ -37,28 +53,24 @@ void WatchdogIntHandler(void);
 
 
 
-// Password Variables
-int password[4] = {1, 2, 3, 4};  // Correct sequence
-int user_input[4];               // Store user input
-int input_index = 0;             // Track input position
+int password[4] = {1, 2, 3, 4}; // password sequence for lock device
+int user_input[4];              // array used to get user input
+int input_index = 0;            // variable used to keep track of user input 
 
 
 
 
-volatile bool g_bWatchdogFeed = 1;
+volatile bool g_bWatchdogFeed = 1; //intialize feed variable to feed for watchdog
 
-/*
- * main.c
- */
 
-int main(void)
-{
-    unsigned long INPUT;
+int main(void){
+    unsigned long adc_input; //used to store adc value 
 
-    portF_input_setup(GPIO_PIN_0);
-    portF_output_setup(GPIO_PIN_2 | GPIO_PIN_3);
+    portF_input_setup(GPIO_PIN_0); //enable PF0 for user input 
+    portF_output_setup(GPIO_PIN_2 | GPIO_PIN_3); //enable PF2 and PF3 for led output 
     systick(0xFFFFFF);
 
+    //functions to initialize peripherals and software
     keypad_Init();
     UART_Init();
     Servo_Init();
@@ -90,85 +102,79 @@ int main(void)
     //It is configured that the ADC interrupt is (allowed or not allowed) to happen
     ADCSequenceEnable(ADC0_BASE, 0); //Enable ADC0 with sample sequence number 0
 
-    while (1)
-    {
+    while (1) {
         ADCProcessorTrigger(ADC0_BASE,0);//causes a processor trigger for a sample sequence
-        ADCSequenceDataGet(ADC0_BASE,0,&INPUT);//gets ADC value and stores it in unsigned long variable INPUT
-        int key = input(); // check if key pressed
-        if (key != -1) // if key pressed
-        {
-            g_bWatchdogFeed = 1;
+        ADCSequenceDataGet(ADC0_BASE,0,&adc_input);//gets ADC value and stores it in unsigned long variable INPUT
+        int key = input(); //retrieve input value from keypad
+        if (key != -1) { //if statement to check if there is user input
+            g_bWatchdogFeed = 1; //feed dog when there is user input
 
-            user_input[input_index] = key;
-            input_index++;
-            char messageE[]= "Entered digit ";
-            int i = 0;
-            int mess_lenE = sizeof(messageE)/sizeof(messageE[0]);
-            for(i = 0; i < mess_lenE; i++){
+            user_input[input_index] = key; //store user input from keypad
+            input_index++; //increment the user input index
+            char messageE[]= "Entered digit "; //char array for message to display if user input was recognized
+            int i = 0; // initialize variable i 
+            int mess_lenE = sizeof(messageE)/sizeof(messageE[0]); //calculate length of message
+            for(i = 0; i < mess_lenE; i++){ //using UART to display message on terminal
                 UARTCharPut(UART0_BASE, messageE[i]);
             }
-            UARTCharPut(UART0_BASE, '0' + input_index);
-            UARTCharPut(UART0_BASE, '\n');
-            UARTCharPut(UART0_BASE, '\r');
+            UARTCharPut(UART0_BASE, '0' + input_index); //print which input has been entered
+            UARTCharPut(UART0_BASE, '\n'); //newline on terminal
+            UARTCharPut(UART0_BASE, '\r'); //set cursor to start of newline 
         }
 
-            if (input_index > 3) // Check when 4 digits are entered
-            {
-                g_bWatchdogFeed = 1;
-                bool correct = true;
-                int i = 0;
-                for (i = 0; i < 4; i++)
-                {
-                    if (user_input[i] != password[i])
-                    {
-                        correct = false;
+            if (input_index > 3) { //checks if user entered all 4 keypad inputs
+                g_bWatchdogFeed = 1; // feed the dog
+                bool correct = true; //originally set the password check to true
+                int i = 0; //intialize loop variable
+                for (i = 0; i < 4; i++) { // go through each user input and compare to password
+                    if (user_input[i] != password[i]){
+                        correct = false; // set password check to false if any digits in the input does not match the password
                         break;
                     }
                 }
 
-                if (correct && (INPUT > 1241))
-                {
-                    lockState = UNLOCK;
-                     user_input[0] = 0;
+                if (correct && (input_index > 1241)) { // check if the potentiometer is in the correct position and if the password entered is correct
+                    lockState = UNLOCK; //set fsm state to unlock 
+                    // set all user inputs back to 0 for the next attempt
+                     user_input[0] = 0; 
                      user_input[1] = 0;
                      user_input[2] = 0;
                      user_input[3] = 0;
                      correct = false;
                      input_index = 0;
                 }
-                else
-                {
+                else {
                     input_index = 0;
-                    char messageW[]= "Incorrect password.";
-                    int i;
-                    int mess_lenW = sizeof(messageW)/sizeof(messageW[0]);
-                    for(i = 0; i < mess_lenW; i++){
+                    char messageW[]= "Incorrect password."; //message when password combination is incorrect
+                    int i; //initialize loop variable
+                    int mess_lenW = sizeof(messageW)/sizeof(messageW[0]); //get the length of the message
+                    for(i = 0; i < mess_lenW; i++){ //print each character of the message
                         UARTCharPut(UART0_BASE, messageW[i]);
                     }
-                    UARTCharPut(UART0_BASE, '\n');
-                    UARTCharPut(UART0_BASE, '\r');
+                    UARTCharPut(UART0_BASE, '\n'); //make a newline after the message
+                    UARTCharPut(UART0_BASE, '\r'); //set cursor to beginning of the newline
                 }
             }
 
 
-        switch(lockState)
-        {
-            case LOCK:
-                GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_2, 0);
-                GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_3, GPIO_PIN_3); // red LED
-                PWMPulseWidthSet(PWM1_BASE, PWM_OUT_5, 5000);
+        //switch statement for each of the states in the FSM 
+        switch(lockState){
+            case LOCK: //lock state
+                GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_2, 0); //make sure green LED is off
+                GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_3, GPIO_PIN_3); // turn on red LED
+                PWMPulseWidthSet(PWM1_BASE, PWM_OUT_5, 5000); //set PWM so servo motor is in lock state, -90 degrees
                 break;
-            case UNLOCK:
-                GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_3, 0);
-                GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_2, GPIO_PIN_2); // green LED
-                PWMPulseWidthSet(PWM1_BASE, PWM_OUT_5, 1000);
-                SysCtlDelay(SysCtlClockGet() * 1 / 3 * 5);
-                lockState = LOCK;
+            case UNLOCK: //unlock state
+                GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_3, 0); //make sure red LED is off
+                GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_2, GPIO_PIN_2); // turn on green LED
+                PWMPulseWidthSet(PWM1_BASE, PWM_OUT_5, 1000); // set PWM so servo motor is in unlock state, 90 degrees
+                SysCtlDelay(SysCtlClockGet() * 1 / 3 * 5); //set a delay so system stays unlocked for approximately 5 seconds
+                lockState = LOCK; //set state back to lock
                 break;
-            case INTRUDER:
-                GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_2, 0);
-                GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_3, GPIO_PIN_3); // red LED
-                PWMPulseWidthSet(PWM1_BASE, PWM_OUT_5, 5000);
+            case INTRUDER: //intruder state
+                GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_2, 0); //make sure green LED is off
+                GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_3, GPIO_PIN_3); //turn on red LED
+                PWMPulseWidthSet(PWM1_BASE, PWM_OUT_5, 5000); //set PWM so servo motor is in lock state, -90 degrees
                 break;
         }
 
@@ -207,6 +213,8 @@ void portF_output_setup(uint8_t pins){
     GPIO_PORTF_DEN_R |= pins;     //enable pin
 }
 
+// Start the function: UART_Init
+// It is type void since it doesn't return anything
 void UART_Init(void) {
     SysCtlPeripheralEnable(SYSCTL_PERIPH_UART0);
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
@@ -217,7 +225,8 @@ void UART_Init(void) {
         (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE | UART_CONFIG_PAR_NONE));
 }
 
-
+// Start the function: Servo_Init
+// It is type void since it doesn't return anything
 void Servo_Init(void) {
     SysCtlPWMClockSet(SYSCTL_PWMDIV_8);
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOF);
@@ -247,6 +256,8 @@ void systick(int reload_val){
     NVIC_ST_CTRL_R = 0x07;              //enable SysTick with interrupts
 }
 
+// Start the function: intruder_alert
+// It is type void since it doesn't return anything
 void intruder_alert(void){
     GPIOIntClear(GPIO_PORTF_BASE, GPIO_PIN_0);
     if(!GPIOPinRead(GPIO_PORTF_BASE, GPIO_PIN_0)){
@@ -267,6 +278,8 @@ void intruder_alert(void){
 //*****************
 // Keypad setup
 //*****************
+
+
 void keypad_Init(){
     SYSCTL_RCGCGPIO_R |= SYSCTL_RCGCGPIO_R1 | SYSCTL_RCGCGPIO_R2 | SYSCTL_RCGCGPIO_R4;
     while((SYSCTL_RCGCGPIO_R & (SYSCTL_RCGCGPIO_R1 | SYSCTL_RCGCGPIO_R2 | SYSCTL_RCGCGPIO_R4))==0);
@@ -281,8 +294,6 @@ void keypad_Init(){
     GPIO_PORTE_DEN_R |= 0x0F;
     GPIO_PORTE_DIR_R |= 0x0F;
 }
-
-
 
 int input(){
     int row, col;
@@ -330,6 +341,7 @@ void WatchdogIntHandler(void)
 
 
 }
+
 
 void Watchdog_Init(void)
 {
