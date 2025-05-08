@@ -28,18 +28,18 @@
 #include "driverlib/adc.h"
 #include "driverlib/systick.h"
 #include "driverlib/pwm.h"
-#include "drivysteerlib/adc.h"
+#include "driverlib/adc.h"
 #include "driverlib/watchdog.h"
 
 
 
 
-//structure used for the FSM of the system 
+//structure used for the FSM of the system
 typedef enum {LOCK, UNLOCK, INTRUDER} lockStates;
-lockStates lockState = LOCK; // Initialize state to LOCK 
+lockStates lockState = LOCK; // Initialize state to LOCK
 
 
-//function prototypes 
+//function prototypes
 void Servo_Init(void);
 void intruder_alert(void);
 void portF_input_setup(uint8_t pins);
@@ -55,7 +55,7 @@ void WatchdogIntHandler(void);
 
 int password[4] = {1, 2, 3, 4}; // password sequence for lock device
 int user_input[4];              // array used to get user input
-int input_index = 0;            // variable used to keep track of user input 
+int input_index = 0;            // variable used to keep track of user input
 
 
 
@@ -64,10 +64,10 @@ volatile bool g_bWatchdogFeed = 1; //intialize feed variable to feed for watchdo
 
 
 int main(void){
-    unsigned long adc_input; //used to store adc value 
+    unsigned long adc_input; //used to store adc value
 
-    portF_input_setup(GPIO_PIN_0); //enable PF0 for user input 
-    portF_output_setup(GPIO_PIN_2 | GPIO_PIN_3); //enable PF2 and PF3 for led output 
+    portF_input_setup(GPIO_PIN_0); //enable PF0 for user input
+    portF_output_setup(GPIO_PIN_2 | GPIO_PIN_3); //enable PF2 and PF3 for led output
     systick(0xFFFFFF);
 
     //functions to initialize peripherals and software
@@ -76,17 +76,17 @@ int main(void){
     Servo_Init();
     Watchdog_Init();
 
-    //setup the interrupt to PF0 for the IR sensor 
-    GPIOIntClear(GPIO_PORTF_BASE, GPIO_PIN_0);                          // clear the flag so the interrupt can happen again 
+    //setup the interrupt to PF0 for the IR sensor
+    GPIOIntClear(GPIO_PORTF_BASE, GPIO_PIN_0);                          // clear the flag so the interrupt can happen again
     GPIOIntTypeSet(GPIO_PORTF_BASE, GPIO_PIN_0, GPIO_FALLING_EDGE);     // set interrupt type to falling edge for PF0 (IR sensor, active low)
     GPIOIntRegister(GPIO_PORTF_BASE, intruder_alert);                   // register interrupt handler to intruder_alert function
-    GPIOIntEnable(GPIO_PORTF_BASE, GPIO_PIN_0);                         // register interrupt handler to intruder_alert function            
+    GPIOIntEnable(GPIO_PORTF_BASE, GPIO_PIN_0);                         // register interrupt handler to intruder_alert function
     SysTickIntRegister(intruder_alert);                                 // registers intruder_alert as SysTick interrupt handler
     IntMasterEnable();                                                  // enable interrupts
 
     WatchdogIntClear(WATCHDOG0_BASE);                                   //initially have watchdog cleared
 
- 
+
 
 
     //Peripheral setup for ADC0
@@ -112,14 +112,14 @@ int main(void){
             user_input[input_index] = key; //store user input from keypad
             input_index++; //increment the user input index
             char messageE[]= "Entered digit "; //char array for message to display if user input was recognized
-            int i = 0; // initialize variable i 
+            int i = 0; // initialize variable i
             int mess_lenE = sizeof(messageE)/sizeof(messageE[0]); //calculate length of message
             for(i = 0; i < mess_lenE; i++){ //using UART to display message on terminal
                 UARTCharPut(UART0_BASE, messageE[i]);
             }
             UARTCharPut(UART0_BASE, '0' + input_index); //print which input has been entered
             UARTCharPut(UART0_BASE, '\n'); //newline on terminal
-            UARTCharPut(UART0_BASE, '\r'); //set cursor to start of newline 
+            UARTCharPut(UART0_BASE, '\r'); //set cursor to start of newline
         }
 
             if (input_index > 3) { //checks if user entered all 4 keypad inputs
@@ -134,9 +134,9 @@ int main(void){
                 }
 
                 if (correct && (input_index > 1241)) { // check if the potentiometer is in the correct position and if the password entered is correct
-                    lockState = UNLOCK; //set fsm state to unlock 
+                    lockState = UNLOCK; //set fsm state to unlock
                     // set all user inputs back to 0 for the next attempt
-                     user_input[0] = 0; 
+                     user_input[0] = 0;
                      user_input[1] = 0;
                      user_input[2] = 0;
                      user_input[3] = 0;
@@ -157,7 +157,7 @@ int main(void){
             }
 
 
-        //switch statement for each of the states in the FSM 
+        //switch statement for each of the states in the FSM
         switch(lockState){
             case LOCK: //lock state
                 GPIOPinWrite(GPIO_PORTF_BASE, GPIO_PIN_2, 0); //make sure green LED is off
@@ -217,8 +217,8 @@ void portF_output_setup(uint8_t pins){
 // It is type void since it doesn't return anything
 // Step 1 is to enable the UART hardware
 // Step 2 is to enable the GPIO A pin for the UART
-// Step 3 is to configure the UART RX line 
-// Step 4 is to configure the UART TX line 
+// Step 3 is to configure the UART RX line
+// Step 4 is to configure the UART TX line
 // Step 5 is to configure UART to 8N1 at 115200 bps
 void UART_Init(void) {
     SysCtlPeripheralEnable(SYSCTL_PERIPH_UART0); // Enable UART hardware
@@ -232,7 +232,7 @@ void UART_Init(void) {
 
 // Start the function: Servo_Init
 // It is type void since it doesn't return anything
-// Step 1 is to divide the system clock by 8 and set it to the PWM clock 
+// Step 1 is to divide the system clock by 8 and set it to the PWM clock
 // Step 2 is to enable port F for the PWM signal
 // Step 3 is to enable module 1 for the PWM
 // Step 4 is to configure PF1 pin as PWM
@@ -241,10 +241,10 @@ void UART_Init(void) {
 // Step 7 is to set up the period of the PWM signal
 // Step 8 is to set up the duty cycle to 12.5%
 // Step 9 is to enable the PWM generator
-// Step 10 is to turn on the output pin 
+// Step 10 is to turn on the output pin
 void Servo_Init(void) {
     SysCtlPWMClockSet(SYSCTL_PWMDIV_8); //divide the system clock by 8 to set up a 20 ms period
-    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOF); // enable port F as the PWM signal 
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOF); // enable port F as the PWM signal
     SysCtlPeripheralEnable(SYSCTL_PERIPH_PWM1); // enable module 1 which is used for the PWM signal
     GPIOPinConfigure(GPIO_PF1_M1PWM5); // configures pin PF1 for the PWM
     GPIOPinTypePWM(GPIO_PORTF_BASE, GPIO_PIN_1); // this is used to set up the actual PF1 pin to use for PWM
@@ -252,7 +252,7 @@ void Servo_Init(void) {
     PWMGenPeriodSet(PWM1_BASE, PWM_GEN_2, 40000); // set the period of the PWM signal to 40000
     PWMPulseWidthSet(PWM1_BASE, PWM_OUT_5, 5000); // set up the default duty cycle to be 5000/40000 = 12.5%
     PWMGenEnable(PWM1_BASE, PWM_GEN_2); // this is to set up the PWM generator
-    PWMOutputState(PWM1_BASE, PWM_OUT_5_BIT, true); //this is to turn on the output pin for the PWM signal 
+    PWMOutputState(PWM1_BASE, PWM_OUT_5_BIT, true); //this is to turn on the output pin for the PWM signal
 }
 
 
@@ -353,7 +353,7 @@ int input(){
 void WatchdogIntHandler(void)
 {
     WatchdogIntClear(WATCHDOG0_BASE); //clear watchdog interrupt so it can happen again
- 
+
     if (!g_bWatchdogFeed && input_index > 0 && input_index < 4){ //if statement to check if watchdog has not been fed and if user has not entered all inputs
         input_index = 0; //set the input index back to 0 for the lock input to reset
         char message[] = "Input timeout. Please try again."; //message to display to user in terminal
@@ -380,7 +380,7 @@ void WatchdogIntHandler(void)
 // Step 4 is to check the register access and make sure it is unlocked
 // Step 5 is to enable the actual watchdog interrupt
 // Step 6 is to set up the period for the watchdog timer to 10 seconds
-// Step 7 is to turn on the watchdog 
+// Step 7 is to turn on the watchdog
 // end the function
 void Watchdog_Init(void)
 {
@@ -397,5 +397,5 @@ void Watchdog_Init(void)
     WatchdogIntEnable(WATCHDOG0_BASE); // this is to enable the actual watchdog interrupt
     WatchdogIntTypeSet(WATCHDOG0_BASE, WATCHDOG_INT_TYPE_INT); // this is for enabling watchdog interrupt as well
     WatchdogReloadSet(WATCHDOG0_BASE, SysCtlClockGet() * 10/3); //set the watchdog timer to 10 seconds
-    WatchdogEnable(WATCHDOG0_BASE); //this is to turn on watchdog interrupt 
+    WatchdogEnable(WATCHDOG0_BASE); //this is to turn on watchdog interrupt
 }
