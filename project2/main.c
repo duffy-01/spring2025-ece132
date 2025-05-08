@@ -278,6 +278,7 @@ void systick(int reload_val){
 // Step 3 of setting the reload value of the timer is to reset the current value that is used for counting
 // Step 4 of setting the reload value of the timer is to initialize the control register to allow counting to happen
 // end the function
+
 void intruder_alert(void){
     GPIOIntClear(GPIO_PORTF_BASE, GPIO_PIN_0);
     if(!GPIOPinRead(GPIO_PORTF_BASE, GPIO_PIN_0)){
@@ -297,49 +298,59 @@ void intruder_alert(void){
 
 // Start the function: keypad_Init
 // It is type void since it doesn't return anything
-// ENTER COMMENTS
+// Step 1: Enable Port B, Port C, and Port E clocks
+// Step 3: Wait for clocks to be fully enabled before proceeding
+// Step 2: Configure Ports (B/E output, C input)
 // end the function
 
 void keypad_Init(){
-    SYSCTL_RCGCGPIO_R |= SYSCTL_RCGCGPIO_R1 | SYSCTL_RCGCGPIO_R2 | SYSCTL_RCGCGPIO_R4;
-    while((SYSCTL_RCGCGPIO_R & (SYSCTL_RCGCGPIO_R1 | SYSCTL_RCGCGPIO_R2 | SYSCTL_RCGCGPIO_R4))==0);
-
+    SYSCTL_RCGCGPIO_R |= SYSCTL_RCGCGPIO_R1 | SYSCTL_RCGCGPIO_R2 | SYSCTL_RCGCGPIO_R4;    // enable clocks for B, C, and E
+    while((SYSCTL_RCGCGPIO_R & (SYSCTL_RCGCGPIO_R1 | SYSCTL_RCGCGPIO_R2 | SYSCTL_RCGCGPIO_R4))==0); // wait for clock to be ready
+    
+    // port B input declaration
     GPIO_PORTB_DEN_R |= 0xFF;
     GPIO_PORTB_DIR_R |= 0xFF;
-
+    
+    // port C output declaration    
     GPIO_PORTC_DEN_R |= 0xF0;
     GPIO_PORTC_DIR_R &= ~0xF0;
     GPIO_PORTC_PDR_R |= 0xF0;
-
+    
+    // port E input declaration
     GPIO_PORTE_DEN_R |= 0x0F;
     GPIO_PORTE_DIR_R |= 0x0F;
 }
 
 
 // Start the function: input
-// It is type void since it doesn't return anything
-// ENTER COMMENTS
+// It is type int since it returns an integer
+// Step 1: Declare row and column variables
+// Step 2: Iterate through a 4x4 array
+// Step 3: Check for keypad HIGH values (i.e. closed switch)
+// Step 4: Return corresponding keypad value according to keymap.
+// Step 5: If keypad press is invalid, return -1 error code.
 // end the function
 
 int input(){
-    int row, col;
-    for(row = 0; row < 4; row++){
-        GPIO_PORTE_DATA_R = (1 << row);
-        for(col = 0; col < 4; col++){
-            if((GPIO_PORTC_DATA_R & (1 << (col + 4))) != 0){
-                while(GPIO_PORTC_DATA_R);
-                int key_map[4][4] = {
-                    {1,2,3,'A'},
-                    {4,5,6,'B'},
-                    {7,8,9,'C'},
-                    {'#',0,'*','D'}
+    int row, col;                         // Declare variables for row and column indices
+    for(row = 0; row < 4; row++){         // Iterate through each row of the keypad
+        GPIO_PORTE_DATA_R = (1 << row);   // Set one row high at a time
+        for(col = 0; col < 4; col++){     // Iterate through each column of the keypad
+            if((GPIO_PORTC_DATA_R & (1 << (col + 4))) != 0){    // Check if the corresponding column pin is high (switch closed)
+                while(GPIO_PORTC_DATA_R); // Wait until the key is released
+                int key_map[4][4] = {     // Define the keypad keymap
+                    {1,2,3,'A'},          // First row of keypad
+                    {4,5,6,'B'},          // Second row of keypad
+                    {7,8,9,'C'},          // Third row of keypad
+                    {'#',0,'*','D'}       // Fourth row of keypad
                 };
-                return key_map[row][col];
+                return key_map[row][col]; // Return the corresponding key from the keymap
             }
         }
     }
-    return -1;
+    return -1;    // Return -1 if no valid key is pressed
 }
+
 
 
 
